@@ -1,19 +1,127 @@
-# 調整カレンダー — 調整さん × Google Calendar 自動登録 PWA
+# 調整カレンダー（chosei-web）
 
-調整さん（chouseisan.com）のURLを管理し、自分の回答（○△）を自動でGoogleカレンダーに反映するPWAアプリです。  
-`credentials.json` は不要。**環境変数だけで動きます。**
+調整さん（chouseisan.com）のURLを登録するだけで、自分の回答（○△）をGoogleカレンダーに自動登録するPWAアプリです。
 
 ---
 
-## 機能概要
+## 機能
 
 | 機能 | 説明 |
 |------|------|
-| 📅 自動カレンダー登録 | 調整さんURLを貼るだけ。自分の○△を自動でカレンダーへ |
-| 🔄 1時間ごと自動更新 | バックグラウンドで全URLをチェック・カレンダー同期 |
-| ✅ 確定検知 | 確定日を検知したら確定イベントだけ残して候補日を削除 |
+| 📅 自動カレンダー登録 | 調整さんURLを登録するだけ。○→確定登録、△→仮登録 |
+| ✅ 確定検知 | 日程確定を検知したら仮登録を本登録に自動切り替え |
+| 🔄 起動時自動更新 | アプリを開くたびに未確定アイテムを自動チェック |
+| 📋 一覧管理 | 複数の調整さんをまとめて確認・管理 |
 | 📱 PWA対応 | ホーム画面に追加してネイティブアプリ感覚で使用 |
-| 🔗 シェアシート連携 | LINEやSlackのURLを長押し→共有→即登録 |
+| 🔐 招待コード認証 | 限定公開用の招待コードでアクセス制限 |
+
+---
+
+## クローンして動かす
+
+### 1. リポジトリをクローン
+
+```bash
+git clone https://github.com/tomoyan76/chosei-web.git
+cd chosei-web
+```
+
+### 2. 依存パッケージをインストール
+
+```bash
+pip3 install -r requirements.txt
+```
+
+### 3. Google Cloud Console でOAuth設定
+
+#### プロジェクト作成
+1. https://console.cloud.google.com/ を開く
+2. 「プロジェクトを選択」→「新しいプロジェクト」→ 任意の名前で作成
+
+#### Google Calendar API を有効化
+```
+APIとサービス > ライブラリ > "Google Calendar API" > 有効にする
+```
+
+#### OAuth 同意画面の設定
+```
+APIとサービス > OAuth 同意画面
+```
+- User Type: **外部** → 作成
+- アプリ名・サポートメール: 任意
+- スコープ: `../auth/userinfo.email`、`../auth/calendar` を追加
+- テストユーザー: 自分のGmailを追加
+
+#### OAuth2 クライアントID を作成
+```
+APIとサービス > 認証情報 > 認証情報を作成 > OAuth クライアント ID
+```
+- アプリケーションの種類: **ウェブアプリケーション**
+- 承認済みのリダイレクト URI:
+  - `http://localhost:8000/api/auth/callback`（ローカル用）
+  - `https://your-app.fly.dev/api/auth/callback`（本番用）
+
+作成後、**クライアントID** と **クライアントシークレット** をコピー。
+
+### 4. .env ファイルを作成
+
+```bash
+cp .env.example .env
+```
+
+`.env` を編集して以下を設定：
+
+```
+GOOGLE_CLIENT_ID=（取得したクライアントID）
+GOOGLE_CLIENT_SECRET=（取得したクライアントシークレット）
+SECRET_KEY=（下記コマンドで生成）
+BASE_URL=http://localhost:8000
+INVITE_CODE=（任意の招待コード。空欄なら制限なし）
+```
+
+```bash
+# SECRET_KEY の生成
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### 5. 起動
+
+```bash
+python3 main.py
+```
+
+→ http://localhost:8000 を開く
+
+---
+
+## Fly.io へのデプロイ
+
+```bash
+# flyctl インストール（未インストールの場合）
+curl -L https://fly.io/install.sh | sh
+
+# ログイン
+fly auth login
+
+# アプリ作成（初回のみ）
+fly launch
+
+# 環境変数を設定
+fly secrets set GOOGLE_CLIENT_ID=your-client-id
+fly secrets set GOOGLE_CLIENT_SECRET=your-client-secret
+fly secrets set SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+fly secrets set BASE_URL=https://your-app.fly.dev
+fly secrets set INVITE_CODE=your-invite-code
+
+# デプロイ
+fly deploy
+```
+
+### GitHub Actions で自動デプロイ（推奨）
+
+1. `fly tokens create deploy` でトークンを発行
+2. GitHubリポジトリの Settings → Secrets → `FLY_API_TOKEN` として登録
+3. 以降は `git push origin main` するだけで自動デプロイ
 
 ---
 
@@ -21,154 +129,29 @@
 
 | 変数名 | 必須 | 説明 |
 |--------|------|------|
-| `GOOGLE_CLIENT_ID` | ✅ | Google Cloud Console のOAuth2クライアントID |
-| `GOOGLE_CLIENT_SECRET` | ✅ | OAuth2クライアントシークレット |
-| `SECRET_KEY` | ✅ | セッション署名用ランダム文字列 |
-| `BASE_URL` | ✅ | アプリのURL（例: `http://localhost:8000`） |
-
-```bash
-# SECRET_KEY の生成コマンド
-python -c "import secrets; print(secrets.token_hex(32))"
-```
+| `GOOGLE_CLIENT_ID` | ✅ | Google OAuth2 クライアントID |
+| `GOOGLE_CLIENT_SECRET` | ✅ | Google OAuth2 クライアントシークレット |
+| `SECRET_KEY` | ✅ | Cookie署名用ランダム文字列（`secrets.token_hex(32)` で生成） |
+| `BASE_URL` | ✅ | アプリのURL（例: `https://your-app.fly.dev`） |
+| `INVITE_CODE` | ☑️ | 招待コード。設定しない場合はアクセス制限なし |
 
 ---
 
-## Google Cloud Console — OAuth設定手順
-
-### 1. プロジェクト作成
-
-1. https://console.cloud.google.com/ を開く
-2. 上部「プロジェクトを選択」→「新しいプロジェクト」
-3. プロジェクト名（例: `chosei-cal`）→「作成」
-
-### 2. Google Calendar API を有効化
-
-```
-APIとサービス > ライブラリ > "Google Calendar API" 検索 > 有効にする
-```
-
-### 3. OAuth 同意画面の設定
-
-```
-APIとサービス > OAuth 同意画面
-```
-
-- User Type: **外部** → 「作成」
-- アプリ名: `調整カレンダー`、サポートメール: 自分のGmail
-- スコープ: `../auth/userinfo.email`、`../auth/calendar` を追加
-- テストユーザー: 自分のGmailを追加（公開前必須）
-- 「保存して次へ」を3回
-
-### 4. OAuth2 クライアントID を作成
-
-```
-APIとサービス > 認証情報 > 認証情報を作成 > OAuth クライアント ID
-```
-
-- アプリケーションの種類: **ウェブアプリケーション**
-- 承認済みの JavaScript 生成元:
-  - `http://localhost:8000`
-  - `https://your-app.railway.app`（本番）
-- 承認済みのリダイレクト URI:
-  - `http://localhost:8000/api/auth/callback`
-  - `https://your-app.railway.app/api/auth/callback`（本番）
-
-→「作成」後、**クライアントID** と **クライアントシークレット** をコピー
-
----
-
-## ローカル開発
-
-```bash
-cd chosei-web
-
-# 仮想環境作成（任意）
-python3 -m venv venv && source venv/bin/activate
-
-# 依存パッケージインストール
-pip install -r requirements.txt
-
-# アイコン生成
-python generate_icons.py
-
-# .env ファイルを作成
-cp .env.example .env
-# .env を編集して GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SECRET_KEY を設定
-
-# サーバー起動
-uvicorn main:app --reload --port 8000
-```
-
-→ http://localhost:8000 を開く
-
----
-
-## Railway へのデプロイ（推奨）
-
-```bash
-# Railway CLI インストール
-brew install railway   # macOS
-
-# ログイン
-railway login
-
-# プロジェクト初期化（chosei-webディレクトリで実行）
-railway init
-
-# 環境変数設定
-railway variables set GOOGLE_CLIENT_ID=your-client-id
-railway variables set GOOGLE_CLIENT_SECRET=your-client-secret
-railway variables set SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-
-# 一旦デプロイしてURLを取得してからBASE_URLを設定
-railway up
-railway variables set BASE_URL=https://$(railway domain)
-
-# 最終デプロイ
-railway up
-```
-
-### デプロイ後にすること
-
-Google Cloud Console のリダイレクトURIに本番URLを追加:
-```
-https://your-app.railway.app/api/auth/callback
-```
-
----
-
-## Vercel へのデプロイ
-
-```bash
-npm i -g vercel
-cd chosei-web
-vercel
-
-vercel env add GOOGLE_CLIENT_ID
-vercel env add GOOGLE_CLIENT_SECRET
-vercel env add SECRET_KEY
-vercel env add BASE_URL   # https://your-app.vercel.app
-
-vercel --prod
-```
-
----
-
-## iOS ホーム画面追加（PWAインストール）
+## iOS ホーム画面への追加（PWAインストール）
 
 1. **Safari** でアプリURLを開く（Chrome等では追加不可）
 2. 下部ツールバーの **共有ボタン**（□↑）をタップ
-3. 「**ホーム画面に追加**」をタップ
-4. 「**追加**」をタップ
+3. 「**ホーム画面に追加**」をタップ → 「追加」
 
-### シェアシートから調整さんURLを送る方法
+### LINEから調整さんURLを共有する方法
 
-1. LINEやSlackで調整さんURLを **長押し**
-2. 「**共有**」をタップ
+LINEのURL長押しでは iOS の共有シートが開きません。以下の手順で操作してください：
+
+1. LINEでURLをタップして開く
+2. LINE内ブラウザの **共有ボタン**（↑）をタップ
 3. **調整カレンダー** のアイコンをタップ
-4. 自動でURLが登録されます
 
-> シェアシートに表示されるには、先にPWAをインストールしておく必要があります。
+> PWAをインストール済みの場合のみ共有先に表示されます。
 
 ---
 
@@ -176,24 +159,10 @@ vercel --prod
 
 | 回答 | カレンダーイベント |
 |------|-----------------|
-| ○（参加可） | `status: confirmed` で作成 |
-| △（仮参加） | `status: tentative` で作成（薄表示） |
+| ○（参加可） | 通常イベントとして登録 |
+| △（仮参加） | 仮イベント（タイトルに【仮】）として登録 |
 | ×（不参加） | 登録しない |
 | 確定検知時 | 確定日のみ残し、他の候補日イベントを削除 |
-
----
-
-## 名前マッチングロジック
-
-本名「山田　太郎」・ニックネーム「たろう」で登録すると以下のトークンが生成されます:
-
-```
-山田 / 太郎 / 山田太郎 / たろう
-```
-
-- 全角スペース（　）と半角スペース（ ）は同一視
-- 回答者名にいずれかのトークンが**部分一致**すれば自分の回答として認識
-- 複数マッチ時は画面上でラジオボタン選択（選択結果はDB保存・次回から自動選択）
 
 ---
 
@@ -203,42 +172,35 @@ vercel --prod
 chosei-web/
 ├── main.py              # FastAPI アプリ本体
 ├── scraper.py           # 調整さんスクレイパー
-├── calendar_client.py   # Google Calendar API クライアント（環境変数ベース）
+├── calendar_client.py   # Google Calendar API クライアント
 ├── db.py                # SQLite データベース
-├── generate_icons.py    # PWAアイコン生成スクリプト
-├── static/
-│   ├── index.html       # フロントエンド SPA（Vanilla JS）
-│   ├── manifest.json    # PWAマニフェスト（share_target含む）
-│   ├── sw.js            # Service Worker
-│   ├── icon-192.png     # PWAアイコン（generate_icons.pyで生成）
-│   └── icon-512.png
+├── Dockerfile           # コンテナ設定
+├── fly.toml             # Fly.io 設定
 ├── .env.example         # 環境変数テンプレート
-├── Procfile             # Railway / Heroku 用
 ├── requirements.txt
-├── chosei.db            # SQLite DB（自動生成）
-└── README.md
+├── static/
+│   ├── index.html       # フロントエンド（Vanilla JS PWA）
+│   ├── manifest.json    # PWAマニフェスト
+│   ├── sw.js            # Service Worker
+│   ├── icon-192.png
+│   └── icon-512.png
+└── .github/
+    └── workflows/
+        └── deploy.yml   # GitHub Actions 自動デプロイ
 ```
 
 ---
 
 ## トラブルシューティング
 
-### `GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET が設定されていません` エラー
+**`GOOGLE_CLIENT_ID が設定されていません` エラー**
+→ `.env` ファイルの値を確認し、サーバーを再起動してください。
 
-`.env` ファイルを確認してください。値が正しく設定されているか、サーバーを再起動したか確認してください。
+**OAuth エラー `redirect_uri_mismatch`**
+→ Google Cloud Console のリダイレクトURIに `{BASE_URL}/api/auth/callback` が登録されているか確認してください。
 
-### OAuth エラー `redirect_uri_mismatch`
+**招待コード画面が出ない（古い画面が表示される）**
+→ Safariのキャッシュをクリアするか、アドレスバーからURLを直接入力して再アクセスしてください。
 
-Google Cloud Console のリダイレクトURIに `BASE_URL/api/auth/callback` が登録されているか確認してください。
-
-### スクレイピングが失敗する
-
-- URLが `https://chouseisan.com/s?h=XXXX` 形式か確認
-- 調整さんのページがブラウザで正常に開けるか確認
-- アクセス数制限に引っかかっている場合は数分待ってリトライ
-
-### カレンダーに登録されない
-
-- 設定タブでGoogleカレンダーが「連携済み ✓」になっているか確認
-- Google Cloud ConsoleでCalendar APIが有効になっているか確認
-- テストユーザーに自分のGmailが追加されているか確認（OAuth同意画面が「テスト」状態の場合）
+**カレンダーに登録されない**
+→ 設定タブでGoogleカレンダーが「連携済み ✓」になっているか確認してください。Google Cloud ConsoleでCalendar APIが有効か、テストユーザーに自分のGmailが追加されているかも確認してください。

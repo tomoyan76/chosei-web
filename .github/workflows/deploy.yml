@@ -22,3 +22,8 @@ jobs:
         run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Confirm deploy status
+        run: gh run list --limit 3
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

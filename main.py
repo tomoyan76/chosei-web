@@ -24,8 +24,6 @@ from fastapi import FastAPI, HTTPException, Request, Depends, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from apscheduler.schedulers.background import BackgroundScheduler
-
 import db
 import scraper as sc
 import calendar_client as cal
@@ -84,36 +82,12 @@ def require_invite(request: Request):
         raise HTTPException(status_code=401, detail="招待コードが必要です")
 
 # ────────────────────────────────────────────────
-# バックグラウンド定期実行
+# 起動・終了イベント（スケジューラ廃止）
 # ────────────────────────────────────────────────
-
-scheduler = BackgroundScheduler(timezone="Asia/Tokyo")
-
-
-def auto_check_all():
-    """全アイテムを自動チェック（1時間ごと）"""
-    logger.info("自動チェック開始")
-    items = db.list_items()
-    for item in items:
-        if item["status"] == "confirmed":
-            continue
-        try:
-            _refresh_item(item["id"])
-        except Exception as e:
-            logger.error(f"自動チェックエラー (id={item['id']}): {e}")
-    logger.info(f"自動チェック完了: {len(items)}件")
-
 
 @app.on_event("startup")
 async def startup_event():
-    scheduler.add_job(auto_check_all, "interval", hours=1, id="auto_check")
-    scheduler.start()
-    logger.info("APScheduler 起動: 1時間ごとに自動チェック")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    scheduler.shutdown(wait=False)
+    logger.info("アプリ起動完了（自動チェックなし・アプリ起動時に更新）")
 
 
 # ────────────────────────────────────────────────
@@ -363,6 +337,25 @@ async def api_select_respondent(payload: SelectRespondentPayload, _: None = Depe
         payload.item_id, item["url"], item["title"], event_data, payload.respondent_name
     )
     return {"ok": True}
+
+
+@app.post("/api/chouseisan/refresh-all")
+async def api_refresh_all(_: None = Depends(require_invite)):
+    """アプリ起動時に未確定アイテムを全件更新"""
+    items = db.list_items()
+    updated = 0
+    errors = 0
+    for item in items:
+        if item["status"] == "confirmed":
+            continue
+        try:
+            _refresh_item(item["id"])
+            updated += 1
+        except Exception as e:
+            logger.error(f"更新エラー (id={item['id']}): {e}")
+            errors += 1
+    logger.info(f"起動時更新完了: {updated}件更新, {errors}件エラー")
+    return {"ok": True, "updated": updated, "errors": errors}
 
 
 @app.post("/api/chouseisan/{item_id}/refresh")
