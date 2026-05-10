@@ -521,9 +521,88 @@
     height: 18px;
     flex-shrink: 0;
   }
+
+  /* ── 招待コード画面 ── */
+  #invite-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #4F72FF 0%, #7C3AED 100%);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #invite-screen.visible { display: flex; }
+  .invite-card {
+    background: white;
+    border-radius: 20px;
+    padding: 40px 32px;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  }
+  .invite-icon { font-size: 3rem; margin-bottom: 12px; }
+  .invite-card h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .invite-card p {
+    font-size: .875rem;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+  }
+  #invite-input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    text-align: center;
+    letter-spacing: .05em;
+    outline: none;
+    transition: border-color .2s;
+    margin-bottom: 12px;
+  }
+  #invite-input:focus { border-color: var(--primary); }
+  #invite-input.error { border-color: var(--danger); }
+  #invite-error {
+    font-size: .8rem;
+    color: var(--danger);
+    margin-bottom: 12px;
+    min-height: 1em;
+  }
+  #invite-submit {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #4F72FF 0%, #7C3AED 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  #invite-submit:disabled { opacity: .6; cursor: not-allowed; }
 </style>
 </head>
 <body>
+
+<!-- 招待コード画面 -->
+<div id="invite-screen">
+  <div class="invite-card">
+    <div class="invite-icon">🔐</div>
+    <h2>招待コードを入力</h2>
+    <p>このアプリは限定公開中です。<br>招待コードを入力してください。</p>
+    <input id="invite-input" type="text" placeholder="招待コード" autocomplete="off" autocapitalize="off">
+    <div id="invite-error"></div>
+    <button id="invite-submit" onclick="submitInviteCode()">入る</button>
+  </div>
+</div>
 
 <header>
   <h1><span class="icon">📅</span>調整カレンダー</h1>
@@ -705,9 +784,74 @@ if ('serviceWorker' in navigator) {
 }
 
 // ════════════════════════════════════════════════
+// 招待コード認証
+// ════════════════════════════════════════════════
+async function checkInviteAuth() {
+  try {
+    const res = await fetch('/api/auth/status');
+    const data = await res.json();
+    if (!data.authenticated) {
+      document.getElementById('invite-screen').classList.add('visible');
+      document.getElementById('invite-input').focus();
+      return false;
+    }
+  } catch (e) {
+    // ネットワークエラー時はそのまま進む
+  }
+  return true;
+}
+
+async function submitInviteCode() {
+  const input = document.getElementById('invite-input');
+  const errorEl = document.getElementById('invite-error');
+  const btn = document.getElementById('invite-submit');
+  const code = input.value.trim();
+
+  if (!code) {
+    input.classList.add('error');
+    errorEl.textContent = '招待コードを入力してください';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '確認中...';
+  input.classList.remove('error');
+  errorEl.textContent = '';
+
+  try {
+    const res = await fetch('/api/auth/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (res.ok) {
+      document.getElementById('invite-screen').classList.remove('visible');
+      await initApp();
+    } else {
+      input.classList.add('error');
+      errorEl.textContent = '招待コードが正しくありません';
+      btn.disabled = false;
+      btn.textContent = '入る';
+      input.select();
+    }
+  } catch (e) {
+    errorEl.textContent = 'エラーが発生しました。再試行してください。';
+    btn.disabled = false;
+    btn.textContent = '入る';
+  }
+}
+
+// Enterキーでも送信
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('invite-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitInviteCode();
+  });
+});
+
+// ════════════════════════════════════════════════
 // 初期化
 // ════════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', async () => {
+async function initApp() {
   const params = new URLSearchParams(location.search);
 
   // OAuth コールバック処理
@@ -738,6 +882,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   await loadSettings();
   await loadItems();
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const authenticated = await checkInviteAuth();
+  if (authenticated) await initApp();
 });
 
 // ════════════════════════════════════════════════

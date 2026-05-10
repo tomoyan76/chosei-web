@@ -1,0 +1,49 @@
+# flyctl launch added from .gitignore
+# Python
+**/__pycache__
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/.Python
+**/*.egg
+**/*.egg-info
+**/dist
+**/build
+**/venv
+**/.venv
+**/env
+**/.env
+
+# 環境変数（絶対にコミットしない）
+**/.env
+**/.env.local
+**/.env.*.local
+
+# DB（本番はRailwayボリュームで管理）
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# macOS
+**/.DS_Store
+**/.AppleDouble
+**/.LSOverride
+
+# IDE
+**/.vscode
+**/.idea
+**/*.swp
+**/*.swo
+
+# ログ
+**/*.log
+**/logs
+
+# テスト・カバレッジ
+**/.coverage
+**/htmlcov
+**/.pytest_cache
+
+# デプロイスクリプト（ローカル専用）
+**/deploy.command
+fly.toml

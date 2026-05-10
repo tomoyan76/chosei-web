@@ -5,6 +5,8 @@
     uvicorn main:app --reload --port 8000
 """
 import os
+import hmac
+import hashlib
 import logging
 import secrets
 import urllib.parse
@@ -18,7 +20,7 @@ try:
 except ImportError:
     pass
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -49,6 +51,37 @@ db.init_db()
 
 # OAuthステート管理（メモリ内）
 _oauth_states: dict = {}
+
+# ────────────────────────────────────────────────
+# 招待コード認証
+# ────────────────────────────────────────────────
+
+INVITE_CODE = os.environ.get("INVITE_CODE", "")
+_SECRET_KEY = os.environ.get("SECRET_KEY", "default-secret")
+INVITE_COOKIE = "invite_auth"
+
+
+def _make_invite_token() -> str:
+    """招待コードとシークレットキーからHMACトークンを生成"""
+    return hmac.new(
+        _SECRET_KEY.encode(),
+        INVITE_CODE.encode(),
+        hashlib.sha256,
+    ).hexdigest()  # type: ignore
+
+
+def _is_invite_auth(request: Request) -> bool:
+    """リクエストのCookieが有効な招待トークンか確認"""
+    if not INVITE_CODE:
+        return True  # INVITE_CODEが未設定なら制限なし
+    token = request.cookies.get(INVITE_COOKIE, "")
+    return hmac.compare_digest(token, _make_invite_token())
+
+
+def require_invite(request: Request):
+    """招待コード認証を要求するFastAPI依存関係"""
+    if not _is_invite_auth(request):
+        raise HTTPException(status_code=401, detail="招待コードが必要です")
 
 # ────────────────────────────────────────────────
 # バックグラウンド定期実行
@@ -93,6 +126,35 @@ async def index():
     return HTMLResponse(content=index_path.read_text(encoding="utf-8"))
 
 
+@app.get("/api/auth/status")
+async def api_auth_status(request: Request):
+    """招待コード認証状態を返す"""
+    return {"authenticated": _is_invite_auth(request)}
+
+
+class InvitePayload(BaseModel):
+    code: str
+
+
+@app.post("/api/auth/invite")
+async def api_auth_invite(payload: InvitePayload, response: Response):
+    """招待コードを検証してCookieをセット"""
+    if not INVITE_CODE:
+        return {"ok": True}  # 制限なし
+    if not hmac.compare_digest(payload.code.strip(), INVITE_CODE):
+        raise HTTPException(status_code=403, detail="招待コードが正しくありません")
+    token = _make_invite_token()
+    response.set_cookie(
+        key=INVITE_COOKIE,
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 90,  # 90日
+    )
+    return {"ok": True}
+
+
 @app.get("/manifest.json")
 async def serve_manifest():
     return FileResponse(
@@ -128,7 +190,7 @@ class SettingsPayload(BaseModel):
 
 
 @app.get("/api/settings")
-async def api_get_settings():
+async def api_get_settings(_: None = Depends(require_invite)):
     settings = db.get_settings()
     token = db.get_google_token()
     return {
@@ -143,13 +205,13 @@ async def api_get_settings():
 
 
 @app.post("/api/settings")
-async def api_update_settings(payload: SettingsPayload):
+async def api_update_settings(payload: SettingsPayload, _: None = Depends(require_invite)):
     db.update_settings(payload.full_name.strip(), payload.nickname.strip())
     return {"ok": True}
 
 
 @app.delete("/api/settings/google")
-async def api_disconnect_google():
+async def api_disconnect_google(_: None = Depends(require_invite)):
     db.clear_google_token()
     return {"ok": True}
 
@@ -159,7 +221,7 @@ async def api_disconnect_google():
 # ────────────────────────────────────────────────
 
 @app.get("/api/auth/google")
-async def api_auth_google():
+async def api_auth_google(_: None = Depends(require_invite)):
     if not cal.is_configured():
         raise HTTPException(
             status_code=400,
@@ -204,7 +266,7 @@ class AddItemPayload(BaseModel):
 
 
 @app.get("/api/chouseisan")
-async def api_list_items():
+async def api_list_items(_: None = Depends(require_invite)):
     items = db.list_items()
     result = []
     for item in items:
@@ -219,7 +281,7 @@ async def api_list_items():
 
 
 @app.post("/api/chouseisan")
-async def api_add_item(payload: AddItemPayload):
+async def api_add_item(payload: AddItemPayload, _: None = Depends(require_invite)):
     url = payload.url.strip()
     if not url.startswith("https://chouseisan.com"):
         raise HTTPException(status_code=400, detail="調整さんのURLを入力してください")
@@ -285,7 +347,7 @@ class SelectRespondentPayload(BaseModel):
 
 
 @app.post("/api/chouseisan/select-respondent")
-async def api_select_respondent(payload: SelectRespondentPayload):
+async def api_select_respondent(payload: SelectRespondentPayload, _: None = Depends(require_invite)):
     item = db.get_item(payload.item_id)
     if not item:
         raise HTTPException(status_code=404, detail="アイテムが見つかりません")
@@ -304,7 +366,7 @@ async def api_select_respondent(payload: SelectRespondentPayload):
 
 
 @app.post("/api/chouseisan/{item_id}/refresh")
-async def api_refresh_item(item_id: int):
+async def api_refresh_item(item_id: int, _: None = Depends(require_invite)):
     item = db.get_item(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="アイテムが見つかりません")
@@ -316,7 +378,7 @@ async def api_refresh_item(item_id: int):
 
 
 @app.delete("/api/chouseisan/{item_id}")
-async def api_delete_item(item_id: int):
+async def api_delete_item(item_id: int, _: None = Depends(require_invite)):
     item = db.get_item(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="アイテムが見つかりません")
@@ -338,7 +400,7 @@ async def api_delete_item(item_id: int):
 
 
 @app.post("/api/chouseisan/{item_id}/manual-check")
-async def api_manual_check(item_id: int):
+async def api_manual_check(item_id: int, _: None = Depends(require_invite)):
     """手動でチェックを実行（デバッグ用）"""
     return await api_refresh_item(item_id)
 

@@ -1,23 +1,28 @@
-app = "chosei-web"
-primary_region = "nrt"
+# fly.toml app configuration file generated for chosei-web on 2026-05-10T16:21:18+09:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'chosei-web'
+primary_region = 'nrt'
 
 [build]
 
 [env]
-  PORT = "8080"
+  PORT = '8080'
+
+[[mounts]]
+  source = 'chosei_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
 [[vm]]
-  memory = "256mb"
-  cpu_kind = "shared"
+  memory = '256mb'
   cpus = 1
-
-[mounts]
-  source = "chosei_data"
-  destination = "/data"
+  memory_mb = 256
