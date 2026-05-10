@@ -56,8 +56,8 @@ def is_configured() -> bool:
     )
 
 
-def get_auth_url(state: str) -> str:
-    """OAuth認証URLを生成して返す"""
+def get_auth_url(state: str) -> Tuple[str, Any]:
+    """OAuth認証URLを生成して (auth_url, flow) タプルを返す"""
     flow = Flow.from_client_config(
         _build_client_config(),
         scopes=SCOPES,
@@ -69,16 +69,17 @@ def get_auth_url(state: str) -> str:
         state=state,
         prompt="consent",
     )
-    return auth_url
+    return auth_url, flow
 
 
-def exchange_code_for_token(code: str) -> Dict[str, Any]:
-    """認証コードをトークンに交換する"""
-    flow = Flow.from_client_config(
-        _build_client_config(),
-        scopes=SCOPES,
-        redirect_uri=_get_redirect_uri(),
-    )
+def exchange_code_for_token(code: str, flow: Any = None) -> Dict[str, Any]:
+    """認証コードをトークンに交換する。flowが渡された場合はPKCEのcode_verifierを引き継ぐ"""
+    if flow is None:
+        flow = Flow.from_client_config(
+            _build_client_config(),
+            scopes=SCOPES,
+            redirect_uri=_get_redirect_uri(),
+        )
     flow.fetch_token(code=code)
     creds = flow.credentials
     return _credentials_to_dict(creds)

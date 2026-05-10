@@ -248,35 +248,42 @@
   /* ── Item list ── */
   #item-list { display: flex; flex-direction: column; gap: 0; }
   .item-row {
-    padding: 14px 16px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--border);
     transition: background .15s;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px;
-    align-items: start;
   }
   .item-row:last-child { border-bottom: none; }
-  .item-row:hover { background: #F8FAFC; }
+  .item-row:active { background: #F8FAFC; }
+  .item-row-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .item-row-content {
+    flex: 1;
+    min-width: 0; /* テキストが溢れないようにする */
+  }
   .item-title {
     font-weight: 700;
-    font-size: .925rem;
+    font-size: .9rem;
     color: var(--text);
-    margin-bottom: 3px;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .item-url {
-    font-size: .75rem;
+    font-size: .72rem;
     color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 100%;
   }
   .item-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 8px;
+    gap: 6px;
+    margin-top: 6px;
     flex-wrap: wrap;
   }
   .badge {
@@ -295,7 +302,12 @@
   .badge-batsu     { background: #FEE2E2; color: #991B1B; }
   .badge-none      { background: #F1F5F9; color: #475569; }
 
-  .item-actions { display: flex; gap: 5px; align-items: center; }
+  .item-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+  }
 
   /* 候補日展開 */
   .candidate-list {
@@ -643,9 +655,10 @@
           4. 「<b>追加</b>」をタップ
         </div>
         <div class="setup-hint" style="background:#EFF6FF;border-color:#BFDBFE;color:#1D4ED8">
-          <strong>🔗 シェアシートから登録する方法（PWAインストール後）</strong>
+          <strong>🔗 シェアシートから登録する方法</strong>
           LINEやSlackで調整さんURLを長押し →「共有」→ 調整カレンダーをタップ<br>
-          → 自動でURLが登録されます
+          → 自動でURLが登録されます<br>
+          <span style="font-size:.8rem;opacity:.8">※ この機能はHTTPS環境（本番公開後）でのみ動作します</span>
         </div>
       </div>
     </div>
@@ -936,22 +949,24 @@ function renderItems(items) {
 
     return `
     <div class="item-row" id="item-${item.id}">
-      <div>
-        <div class="item-title">
-          <a href="${esc(item.url)}" target="_blank" rel="noopener" class="link-btn" style="font-weight:700;font-size:.925rem">${esc(item.title || item.url)}</a>
+      <div class="item-row-top">
+        <div class="item-row-content">
+          <div class="item-title">
+            <a href="${esc(item.url)}" target="_blank" rel="noopener" class="link-btn">${esc(item.title || item.url)}</a>
+          </div>
+          <div class="item-url">${esc(item.url)}</div>
         </div>
-        <div class="item-url">${esc(item.url)}</div>
-        <div class="item-meta">
-          ${statusBadge}
-          ${myName}
-          ${confirmedInfo}
-          ${answerPills}
+        <div class="item-actions">
+          <button class="btn btn-secondary btn-sm" onclick="toggleCandidates(${item.id})" title="候補日を表示">📋</button>
+          <button class="btn btn-success btn-sm" onclick="refreshItem(${item.id})" title="最新情報に更新">🔄</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})" title="削除">🗑️</button>
         </div>
       </div>
-      <div class="item-actions">
-        <button class="btn btn-secondary btn-sm" onclick="toggleCandidates(${item.id})" title="候補日を表示">📋</button>
-        <button class="btn btn-success btn-sm" onclick="refreshItem(${item.id})" title="最新情報に更新">🔄</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})" title="削除">🗑️</button>
+      <div class="item-meta">
+        ${statusBadge}
+        ${myName}
+        ${confirmedInfo}
+        ${answerPills}
       </div>
     </div>
     <div class="candidate-list" id="cand-${item.id}">

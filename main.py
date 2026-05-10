@@ -166,9 +166,9 @@ async def api_auth_google():
             detail="GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET が設定されていません。.env ファイルを確認してください。",
         )
     state = secrets.token_urlsafe(16)
-    _oauth_states[state] = True
     try:
-        auth_url = cal.get_auth_url(state)
+        auth_url, flow = cal.get_auth_url(state)
+        _oauth_states[state] = flow  # Flowオブジェクトを保存してPKCEを引き継ぐ
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OAuth URL生成失敗: {e}")
     return RedirectResponse(url=auth_url)
@@ -180,13 +180,13 @@ async def api_auth_callback(request: Request, code: str = None, state: str = Non
         return RedirectResponse(url=f"/?auth_error={error}")
     if not state or state not in _oauth_states:
         return RedirectResponse(url="/?auth_error=invalid_state")
-    _oauth_states.pop(state, None)
+    flow = _oauth_states.pop(state, None)
 
     if not code:
         return RedirectResponse(url="/?auth_error=no_code")
 
     try:
-        token_dict = cal.exchange_code_for_token(code)
+        token_dict = cal.exchange_code_for_token(code, flow=flow)
         db.save_google_token(token_dict)
     except Exception as e:
         logger.error(f"OAuth交換失敗: {e}")
