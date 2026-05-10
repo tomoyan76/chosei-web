@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: chosei-web
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python generate_icons.py
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: BASE_URL
+        sync: false
