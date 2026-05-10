@@ -1159,12 +1159,17 @@ function toggleCandidates(id) {
 // ════════════════════════════════════════════════
 async function addItem() {
   const input = document.getElementById('url-input');
-  const url = input.value.trim();
-  if (!url) { showToast('URLを入力してください', 'warning'); return; }
-  if (!url.includes('chouseisan.com')) {
-    showToast('調整さんのURL（chouseisan.com）を入力してください', 'error');
+  const raw = input.value.trim();
+  if (!raw) { showToast('URLを入力してください', 'warning'); return; }
+
+  // 文章中から調整さんのURLを抽出
+  const match = raw.match(/https?:\/\/chouseisan\.com\S*/);
+  if (!match) {
+    showToast('調整さんのURL（chouseisan.com）が見つかりません', 'error');
     return;
   }
+  const url = match[0].replace(/[）)。、\s]+$/, ''); // 末尾の全角記号を除去
+  input.value = url; // 抽出したURLをボックスに反映
 
   const btn = document.getElementById('add-btn');
   const btnText = document.getElementById('add-btn-text');
