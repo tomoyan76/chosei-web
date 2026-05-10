@@ -790,15 +790,13 @@ async function checkInviteAuth() {
   try {
     const res = await fetch('/api/auth/status');
     const data = await res.json();
-    if (!data.authenticated) {
-      document.getElementById('invite-screen').classList.add('visible');
-      document.getElementById('invite-input').focus();
-      return false;
-    }
+    if (data.authenticated) return true;
   } catch (e) {
-    // ネットワークエラー時はそのまま進む
+    // ネットワークエラー時は未認証扱い
   }
-  return true;
+  document.getElementById('invite-screen').classList.add('visible');
+  setTimeout(() => document.getElementById('invite-input').focus(), 100);
+  return false;
 }
 
 async function submitInviteCode() {

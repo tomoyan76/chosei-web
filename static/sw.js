@@ -4,7 +4,7 @@
  * - APIリクエストはネットワーク優先、失敗時はキャッシュにフォールバック
  */
 
-const CACHE_NAME = "chosei-cal-v1";
+const CACHE_NAME = "chosei-cal-v2";
 
 // キャッシュするアプリシェル
 const APP_SHELL = [
