@@ -881,6 +881,9 @@ async function initApp() {
   await loadSettings();
   await loadItems();
 
+  // URL入力欄にフォーカス（貼り付け・Enter登録をすぐ使えるように）
+  document.getElementById('url-input').focus();
+
   // バックグラウンドで未確定アイテムを全件更新（アプリ起動時のみ）
   refreshAllInBackground();
 }
