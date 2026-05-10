@@ -882,7 +882,7 @@ async function initApp() {
   await loadItems();
 
   // URL入力欄にフォーカス（貼り付け・Enter登録をすぐ使えるように）
-  document.getElementById('url-input').focus();
+  setTimeout(() => document.getElementById('url-input').focus(), 100);
 
   // バックグラウンドで未確定アイテムを全件更新（アプリ起動時のみ）
   refreshAllInBackground();
@@ -1197,8 +1197,10 @@ async function addItem() {
     showToast(`✅ 「${data.title}」を登録しました`, 'success');
     input.value = '';
     await loadItems();
+    input.focus();
   } catch (e) {
     showToast('❌ ネットワークエラーが発生しました', 'error');
+    input.focus();
   } finally {
     btn.disabled = false;
     btnText.textContent = '登録';
