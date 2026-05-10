@@ -1,6 +1,6 @@
 {
-  "name": "調整カレンダー",
-  "short_name": "調整Cal",
+  "name": "調整中...",
+  "short_name": "調整中...",
   "description": "調整さんのURLをGoogleカレンダーに自動登録するアプリ",
   "start_url": "/",
   "display": "standalone",
